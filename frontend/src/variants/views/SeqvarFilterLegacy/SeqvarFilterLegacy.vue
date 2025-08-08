@@ -161,6 +161,26 @@ watch(
 )
 onMounted(() => {
   updatePresetSetLoading()
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const q = params.get('q')
+    if (q) {
+      const parsed = JSON.parse(decodeURIComponent(q))
+      if (parsed && typeof parsed === 'object') {
+        // Apply into current query settings; initialize store first if not ready
+        if (!variantQueryStore.querySettings) {
+          // best-effort: initialize minimal
+          // full init happens in FilterApp
+        }
+        variantQueryStore.querySettings = Object.assign(
+          variantQueryStore.querySettings || {},
+          parsed,
+        )
+      }
+    }
+  } catch (e) {
+    console.warn('Invalid q param for filter import', e)
+  }
 })
 </script>
 

@@ -15,6 +15,7 @@ import FilterFormGenotypePane from '@/variants/components/FilterForm//GenotypePa
 import FilterFormPriotizationPane from '@/variants/components/FilterForm//PrioritizationPane.vue'
 import FilterFormQualityPane from '@/variants/components/FilterForm//QualityPane.vue'
 import FilterFormQuickPresets from '@/variants/components/FilterForm//QuickPresets.vue'
+import ActiveFilterChips from '@/variants/components/ActiveFilterChips.vue'
 import { QueryStates } from '@/variants/enums'
 import { useVariantQueryStore } from '@/variants/stores/variantQuery'
 
@@ -121,6 +122,7 @@ const onSubmitCancelButtonClicked = () => {
           :query-settings="variantQueryStore.querySettings"
           :case="caseDetailsStore.caseObj"
         />
+        <ActiveFilterChips :query-settings="variantQueryStore.querySettings" />
       </div>
       <div class="card-header border-bottom-1 pt-0">
         <ul class="nav nav-tabs card-header-tabs">
