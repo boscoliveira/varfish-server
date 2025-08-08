@@ -102,10 +102,28 @@ const devStoreState = () => {
       <div v-if="filtrationComplexityMode === 'dev'">
         <code>{{ devStoreState() }}</code>
       </div>
-      <div class="ml-auto col-auto p-0">
-        <small v-if="anyHasError" class="text-danger">
-          <br />You must fix the errors before you can filter.
+      <div class="ml-auto col-auto p-0 d-flex align-items-center">
+        <small v-if="anyHasError" class="text-danger mr-3">
+          You must fix the errors before you can filter.
         </small>
+        <button
+          type="button"
+          class="btn btn-outline-secondary mr-2"
+          title="Clear all filters"
+          @click="$emit('update:database', databaseWrapper = 'refseq'); $pinia?.state?.value?.variantQuery?.querySettings && (Object.assign($pinia.state.value.variantQuery.querySettings, { effects: [], gene_allowlist: [], genomic_region: [], prio_hpo_terms: [] }))"
+        >
+          <i-mdi-close />
+          Clear All
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-secondary mr-2"
+          title="Copy shareable link to this filter"
+          @click="navigator.clipboard.writeText(window.location.origin + window.location.pathname + '?q=' + encodeURIComponent(JSON.stringify($pinia.state.value.variantQuery.querySettings || {})))"
+        >
+          <i-mdi-link-variant />
+          Copy Link
+        </button>
         <button
           id="submitFilter"
           type="button"

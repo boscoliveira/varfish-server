@@ -250,6 +250,17 @@ const tableHeaders = computed(() => {
   ]
 })
 
+const quickSorts = [
+  { label: 'Rank: Patho+Pheno', sortBy: 'patho_pheno_score', sortType: 'desc' },
+  { label: 'Rank: Phenotype', sortBy: 'phenotype_score', sortType: 'desc' },
+  { label: 'Rank: Pathogenicity', sortBy: 'pathogenicity_score', sortType: 'desc' },
+]
+
+const applyQuickSort = async (qs) => {
+  variantResultSetStore.tableSortBy = qs.sortBy
+  variantResultSetStore.tableSortType = qs.sortType
+}
+
 /** Rows to display in the table. */
 const tableRows = ref([])
 /** Whether the Vue3EasyDataTable is loading. */
@@ -646,6 +657,18 @@ watch(
         v-model:display-columns="displayColumns"
         :extra-anno-fields="extraAnnoFields"
       />
+      <div class="btn-group btn-group-sm ml-2 align-self-center">
+        <button
+          v-for="qs in quickSorts"
+          :key="qs.label"
+          type="button"
+          class="btn btn-outline-primary"
+          @click="applyQuickSort(qs)"
+          :title="`Sort by ${qs.sortBy} (${qs.sortType})`"
+        >
+          {{ qs.label }}
+        </button>
+      </div>
       <ExportResults />
     </div>
     <div class="card-body p-0 b-0">
