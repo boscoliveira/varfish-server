@@ -12,4 +12,4 @@ ENV DJANGO_SETTINGS_MODULE=config.settings.production \
 EXPOSE 8080
 
 # Start the application
-CMD ["/usr/local/bin/docker-entrypoint.sh", "web"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8080"]
