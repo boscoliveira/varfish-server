@@ -11,5 +11,9 @@ ENV DJANGO_SETTINGS_MODULE=config.settings.production \
 # Expose the port Render will bind to
 EXPOSE 8080
 
-# Start the application
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8080"]
+# Copy a lightweight entrypoint that runs migrations and starts gunicorn
+COPY render/entrypoint.sh /usr/src/app/entrypoint.sh
+RUN chmod +x /usr/src/app/entrypoint.sh
+
+# Start the application via gunicorn after migrations/static collection
+CMD ["/usr/src/app/entrypoint.sh"]
