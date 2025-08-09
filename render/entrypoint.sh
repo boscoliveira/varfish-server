@@ -31,10 +31,10 @@ fi
 echo "Collecting static files..."
 python manage.py collectstatic --noinput
 
-echo "Starting gunicorn..."
+echo "Starting gunicorn on PORT=${PORT:-8080}..."
 # Default Django wsgi app path for varfish-server image
 exec gunicorn config.wsgi:application \
-  --bind 0.0.0.0:8080 \
+  --bind 0.0.0.0:${PORT:-8080} \
   --workers ${GUNICORN_WORKERS:-3} \
   --threads ${GUNICORN_THREADS:-2} \
   --timeout ${GUNICORN_TIMEOUT:-120}
