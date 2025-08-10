@@ -1,0 +1,19 @@
+# Dockerfile for AWS App Runner deployment
+# Build: docker build -f Dockerfile.apprunner -t varfish-apprunner .
+# Push to ECR: see commands below
+
+FROM ghcr.io/varfish-org/varfish-server:main
+
+# Set Django production settings
+ENV DJANGO_SETTINGS_MODULE=config.settings.production
+
+# Copy entrypoint scripts
+COPY render/entrypoint.sh /usr/src/app/entrypoint.sh
+COPY render/entrypoint-web.sh /usr/src/app/entrypoint-web.sh
+RUN chmod +x /usr/src/app/entrypoint.sh /usr/src/app/entrypoint-web.sh
+
+# App Runner expects port 8080 by default
+EXPOSE 8080
+
+# For App Runner: start web server immediately (run migrations separately)
+CMD ["/usr/src/app/entrypoint-web.sh"]

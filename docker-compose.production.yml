@@ -1,0 +1,173 @@
+version: '3.8'
+
+# This compose file can be used in two modes:
+# 1. With local PostgreSQL and Redis (default)
+# 2. With external managed services (set USE_EXTERNAL_SERVICES=true)
+
+services:
+  # PostgreSQL Database (only if not using external)
+  postgres:
+    image: postgres:14-alpine
+    container_name: varfish-postgres
+    restart: unless-stopped
+    profiles: ["local-db"]  # Only starts when using local services
+    environment:
+      POSTGRES_DB: varfish
+      POSTGRES_USER: varfish
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U varfish"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (only if not using external)
+  redis:
+    image: redis:7-alpine
+    container_name: varfish-redis
+    restart: unless-stopped
+    profiles: ["local-db"]  # Only starts when using local services
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Annotation service - Annonars
+  annonars:
+    image: ghcr.io/varfish-org/annonars:latest
+    container_name: varfish-annonars
+    restart: unless-stopped
+    profiles: ["services"]
+    environment:
+      ANNONARS_DB_PATH: /data/annonars
+    volumes:
+      - annonars_data:/data
+    ports:
+      - "127.0.0.1:8081:8080"
+
+  # Viguno service
+  viguno:
+    image: ghcr.io/varfish-org/viguno:latest
+    container_name: varfish-viguno
+    restart: unless-stopped
+    profiles: ["services"]
+    environment:
+      VIGUNO_DB_PATH: /data/viguno
+    volumes:
+      - viguno_data:/data
+    ports:
+      - "127.0.0.1:8082:8080"
+
+  # Main VarFish Web Application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: varfish-server:latest
+    container_name: varfish-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Override with local services if not using external
+      DATABASE_URL: ${DATABASE_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      REDIS_URL: ${CELERY_BROKER_URL}
+    volumes:
+      - static_files:/usr/src/app/static
+      - media_files:/usr/src/app/media
+    ports:
+      - "${PORT:-8080}:8080"
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        python -c 'import time; time.sleep(5)' &&
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput &&
+        gunicorn config.wsgi:application --bind 0.0.0.0:8080 --workers ${GUNICORN_WORKERS:-4} --timeout ${GUNICORN_TIMEOUT:-300}
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: varfish-server:latest
+    container_name: varfish-celery-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      REDIS_URL: ${CELERY_BROKER_URL}
+    volumes:
+      - media_files:/usr/src/app/media
+    command: celery -A config.celery worker -l info --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
+
+  # Celery Beat Scheduler
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: varfish-server:latest
+    container_name: varfish-celery-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      REDIS_URL: ${CELERY_BROKER_URL}
+    command: celery -A config.celery beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+  # Nginx (optional, for SSL termination and static files)
+  nginx:
+    image: nginx:alpine
+    container_name: varfish-nginx
+    restart: unless-stopped
+    profiles: ["with-nginx"]
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx-site.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_files:/usr/share/nginx/html/static:ro
+      - media_files:/usr/share/nginx/html/media:ro
+      - nginx_certs:/etc/nginx/certs
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_files:
+    driver: local
+  media_files:
+    driver: local
+  annonars_data:
+    driver: local
+  viguno_data:
+    driver: local
+  nginx_certs:
+    driver: local
+
+networks:
+  default:
+    name: varfish-network
+    driver: bridge

@@ -1,0 +1,85 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main  # or master, depending on your default branch
+      - production  # optional: separate production branch
+  workflow_dispatch:  # allows manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Deploy to EC2
+      env:
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+        EC2_USER: ${{ secrets.EC2_USER }}
+        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      run: |
+        # Setup SSH
+        echo "$EC2_SSH_KEY" > deploy_key
+        chmod 600 deploy_key
+        
+        # Add host to known hosts
+        mkdir -p ~/.ssh
+        ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+        
+        # Deploy script execution on EC2
+        ssh -i deploy_key ${EC2_USER}@${EC2_HOST} << 'ENDSSH'
+          # Navigate to deployment directory
+          cd ${DEPLOY_PATH:-/home/ubuntu/varfish-server}
+          
+          # Pull latest changes
+          git pull origin main
+          
+          # Build and restart with Docker Compose (if using)
+          if [ -f docker-compose.yml ]; then
+            docker-compose pull
+            docker-compose down
+            docker-compose up -d --build
+          # Or if using standalone Docker
+          elif [ -f Dockerfile ]; then
+            docker build -t varfish-server .
+            docker stop varfish-server || true
+            docker rm varfish-server || true
+            docker run -d --name varfish-server \
+              -p 8080:8080 \
+              --env-file .env \
+              varfish-server
+          # Or if running directly with Django
+          else
+            # Install/update dependencies
+            pip install -r backend/requirements.txt
+            
+            # Run migrations
+            python backend/manage.py migrate
+            
+            # Collect static files
+            python backend/manage.py collectstatic --noinput
+            
+            # Restart service (using systemd)
+            sudo systemctl restart varfish-server
+          fi
+          
+          # Health check
+          sleep 10
+          curl -f http://localhost:8080/health/ || exit 1
+        ENDSSH
+        
+        # Cleanup
+        rm -f deploy_key
+    
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deployment successful!"
+        else
+          echo "❌ Deployment failed!"
+        fi
